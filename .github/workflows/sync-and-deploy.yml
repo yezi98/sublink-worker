@@ -2,7 +2,7 @@ name: Sync Upstream & Deploy
 
 on:
   schedule:
-    - cron: '0 6 * * *'      # 每天北京时间 14:00 执行
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -56,20 +56,28 @@ jobs:
         run: |
           export CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}
           KV_NAMESPACE="SUBLINK_KV"
+
           echo "Checking for KV namespace: $KV_NAMESPACE"
 
+          # 先检查是否已存在
           LIST_OUTPUT=$(wrangler kv namespace list --json 2>&1 || true)
-          KV_ID=$(echo "$LIST_OUTPUT" | jq -r '.[] | select(.title == "sublink-worker-'$KV_NAMESPACE'") | .id' 2>/dev/null || true)
+          KV_ID=$(echo "$LIST_OUTPUT" | jq -r '.[]? | select(.title == "sublink-worker-'$KV_NAMESPACE'") | .id' 2>/dev/null || true)
 
           if [ -z "$KV_ID" ]; then
             echo "Creating KV namespace..."
-            CREATE_OUTPUT=$(wrangler kv namespace create "sublink-worker-$KV_NAMESPACE" 2>&1)
-            KV_ID=$(echo "$CREATE_OUTPUT" | grep -o '[0-9a-f]\{32\}' | head -1)
+            CREATE_OUTPUT=$(wrangler kv namespace create "sublink-worker-$KV_NAMESPACE" --json 2>&1 || true)
+            KV_ID=$(echo "$CREATE_OUTPUT" | jq -r '.id' 2>/dev/null || true)
+
             if [ -z "$KV_ID" ]; then
-              echo "Failed to create KV: $CREATE_OUTPUT"
+              echo "Failed to create KV namespace. Output:"
+              echo "$CREATE_OUTPUT"
               exit 1
             fi
+            echo "KV namespace created successfully with ID: $KV_ID"
+          else
+            echo "KV namespace already exists with ID: $KV_ID"
           fi
+
           echo "KV_ID=$KV_ID" >> $GITHUB_ENV
 
       - name: Update wrangler.toml
