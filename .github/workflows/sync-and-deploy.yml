@@ -56,9 +56,9 @@ jobs:
           KV_NAMESPACE="SUBLINK_KV"
           echo "Checking for KV namespace: $KV_NAMESPACE"
 
-          # 检查是否已存在
-          LIST_OUTPUT=$(wrangler kv namespace list 2>&1 || true)
-          KV_ID=$(echo "$LIST_OUTPUT" | grep -o 'sublink-worker-'$KV_NAMESPACE'[[:space:]]*[0-9a-f]\{32\}' | grep -o '[0-9a-f]\{32\}' | head -1 || true)
+          # 使用 --json 检查是否已存在（更可靠）
+          LIST_OUTPUT=$(wrangler kv namespace list --json 2>&1 || true)
+          KV_ID=$(echo "$LIST_OUTPUT" | jq -r '.[]? | select(.title == "sublink-worker-'$KV_NAMESPACE'") | .id' 2>/dev/null || true)
 
           if [ -z "$KV_ID" ]; then
             echo "Creating KV namespace..."
