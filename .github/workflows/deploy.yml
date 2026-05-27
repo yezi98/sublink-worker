@@ -12,18 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
+      
       - name: Install dependencies
         run: npm install
-
+      
       - name: Install wrangler
         run: npm install -g wrangler
-
+      
       - name: Check and Create KV Namespace
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -62,16 +62,21 @@ jobs:
               echo "KV namespace $KV_NAMESPACE already exists with ID: $KV_ID"
           fi
           echo "KV_ID=$KV_ID" >> $GITHUB_ENV
-
+          
       - name: Update wrangler.toml
         run: |
+          # Read the entire content of wrangler.toml
           WRANGLER_CONTENT=$(cat wrangler.toml)
+          
+          # Update the KV namespace ID
           UPDATED_CONTENT=$(echo "$WRANGLER_CONTENT" | sed 's/id = "[^"]*"/id = "'$KV_ID'"/')
+          
+          # Write the updated content back to wrangler.toml
           echo "$UPDATED_CONTENT" > wrangler.toml
           
           echo "Updated wrangler.toml content:"
           cat wrangler.toml
-
+          
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
