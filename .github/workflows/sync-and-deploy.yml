@@ -24,13 +24,13 @@ jobs:
           git remote add upstream https://github.com/7Sageer/sublink-worker.git || true
           git fetch upstream
 
-          if git merge upstream/main --no-edit; then
+          # 修复点1：使用 -X theirs 自动使用上游代码解决冲突，防止卡死
+          if git merge upstream/main -X theirs --no-edit; then
             echo "Merge successful"
           else
-            echo "Merge conflict detected, keeping upstream version..."
-            git checkout --theirs .github/workflows/deploy.yml
-            git add .github/workflows/deploy.yml
-            git commit -m "Resolve conflict by keeping upstream version"
+            echo "Merge conflict detected, resolved using upstream versions."
+            git add .
+            git commit -m "Resolve conflicts by prioritizing upstream changes"
           fi
 
       - name: Push to origin
@@ -52,17 +52,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
-          export CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # 修复点2：不再重复 export，直接使用环境变量
           KV_NAMESPACE="SUBLINK_KV"
           echo "Checking for KV namespace: $KV_NAMESPACE"
 
-          # 使用 --json 检查是否已存在（更可靠）
-          LIST_OUTPUT=$(wrangler kv namespace list --json 2>&1 || true)
-          KV_ID=$(echo "$LIST_OUTPUT" | jq -r '.[]? | select(.title == "sublink-worker-'$KV_NAMESPACE'") | .id' 2>/dev/null || true)
+          LIST_OUTPUT=$(wrangler kv:namespace list --json 2>&1 || true)
+          KV_ID=$(echo "$LIST_OUTPUT" | jq -r '.[]? | select(.title | contains("'$KV_NAMESPACE'")) | .id' 2>/dev/null | head -n 1 || true)
 
           if [ -z "$KV_ID" ]; then
             echo "Creating KV namespace..."
-            CREATE_OUTPUT=$(wrangler kv namespace create "sublink-worker-$KV_NAMESPACE" 2>&1 || true)
+            CREATE_OUTPUT=$(wrangler kv:namespace create "$KV_NAMESPACE" 2>&1 || true)
             KV_ID=$(echo "$CREATE_OUTPUT" | grep -o '[0-9a-f]\{32\}' | head -1 || true)
 
             if [ -z "$KV_ID" ]; then
@@ -79,12 +78,13 @@ jobs:
 
       - name: Update wrangler.toml
         run: |
-          WRANGLER_CONTENT=$(cat wrangler.toml)
-          UPDATED_CONTENT=$(echo "$WRANGLER_CONTENT" | sed 's/id = "[^"]*"/id = "'$KV_ID'"/')
-          echo "$UPDATED_CONTENT" > wrangler.toml
+          # 修复点3：精准替换 id，防止误伤 account_id
+          sed -i -e 's/^[[:space:]]*id = "[^"]*"/id = "'$KV_ID'"/' wrangler.toml
+          cat wrangler.toml # 打印出来方便在日志中检查是否替换成功
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }} # 修复点4：补充 accountId 参数
           command: deploy
