@@ -51,14 +51,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
-          export NO_UPDATE_NOTIFIER=true # 屏蔽烦人的更新提示
+          export NO_UPDATE_NOTIFIER=true
           KV_NAMESPACE="SUBLINK_KV"
           echo "Checking for KV namespace: $KV_NAMESPACE"
 
-          # 拿到包含了提示语的完整列表数据
           export RAW_LIST=$(wrangler kv namespace list 2>&1 || true)
           
-          # 核心修复点：使用 Node.js 正则精准提取数组，彻底免疫非 JSON 文本的干扰
           KV_ID=$(node -e "
             try {
               const output = process.env.RAW_LIST;
@@ -75,7 +73,6 @@ jobs:
             echo "KV namespace not found. Trying to create..."
             CREATE_OUTPUT=$(wrangler kv namespace create "$KV_NAMESPACE" 2>&1 || true)
             
-            # 使用正则从输出中硬抓取 32 位字符 ID
             KV_ID=$(echo "$CREATE_OUTPUT" | grep -o -i '[0-9a-f]\{32\}' | head -1 || true)
 
             if [ -z "$KV_ID" ]; then
@@ -92,7 +89,8 @@ jobs:
 
       - name: Update wrangler.toml
         run: |
-          sed -i -e 's/^[[:space:]]*id = "[^"]*"/id = "'$KV_ID'"/' wrangler.toml
+          # 修复点：移除了导致匹配失败的行首限制符，恢复通用的替换规则
+          sed -i -e 's/id = "[^"]*"/id = "'$KV_ID'"/g' wrangler.toml
           cat wrangler.toml
 
       - name: Deploy to Cloudflare Workers
