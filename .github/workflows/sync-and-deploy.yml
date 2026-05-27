@@ -20,7 +20,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git remote add upstream https://github.com/7Sagger/sublink-worker.git || true
+          git remote add upstream https://github.com/7Sageer/sublink-worker.git || true
           git fetch upstream
 
           if git merge upstream/main --no-edit; then
