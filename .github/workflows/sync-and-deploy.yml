@@ -2,7 +2,7 @@ name: Sync Upstream & Deploy
 
 on:
   schedule:
-    - cron: '0 6 * * *'      # 每天北京时间 14:00 执行，可修改
+    - cron: '0 6 * * *'      # 每天北京时间 14:00 执行
   workflow_dispatch:
 
 jobs:
@@ -26,14 +26,16 @@ jobs:
           if git merge upstream/main --no-edit; then
             echo "Merge successful"
           else
-            echo "Merge conflict detected!"
-            exit 1
+            echo "Merge conflict detected, keeping upstream version..."
+            git checkout --theirs .github/workflows/deploy.yml
+            git add .github/workflows/deploy.yml
+            git commit -m "Resolve conflict by keeping upstream version"
           fi
 
       - name: Push to origin
         run: git push origin main
 
-      # ==================== 以下为部署部分 ====================
+      # ==================== 部署部分 ====================
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
